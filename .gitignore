@@ -12,3 +12,6 @@ dist/
 # NOT ignored: .claudex/config.json. Project policy is meant to be committed —
 # it is how a repo tightens spend for everyone working in it, which is the whole
 # reason project config outranks user config.
+
+# npm pack output
+*.tgz

@@ -4,6 +4,14 @@
   "description": "Give Claude Code a governed second opinion from your authenticated Codex CLI.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astrosteveo/claudex.git"
+  },
+  "homepage": "https://github.com/astrosteveo/claudex#readme",
+  "bugs": {
+    "url": "https://github.com/astrosteveo/claudex/issues"
+  },
   "engines": {
     "node": ">=20.11"
   },
