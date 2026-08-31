@@ -177,7 +177,10 @@ claudex solve "add retry with backoff to the upload path" --apply
 claudex debate "should the queue be at-least-once or exactly-once here?"
 ```
 
-`solve` runs **plan → implement → verify → review → fix**: Claude plans and reviews, Codex
+Without `--apply`, `solve` stops after planning and prints the plan — the peer is read-only in
+that mode, so running the review loop could only ever review an unchanged tree.
+
+With `--apply`, `solve` runs **plan → implement → verify → review → fix**: Claude plans and reviews, Codex
 implements, your test suite runs on the host between the two, and it loops until the reviewer
 approves or the round budget runs out.
 

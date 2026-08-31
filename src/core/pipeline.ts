@@ -14,6 +14,9 @@ export interface SolveOptions {
 
 export interface SolveResult {
   ok: boolean;
+  /** Set when --apply was omitted: the plan is the whole deliverable. */
+  planOnly?: boolean;
+  plan?: string;
   rounds: number;
   verdict: 'approve' | 'changes-requested' | 'unknown';
   transcriptPath: string;
@@ -59,6 +62,24 @@ export async function solve(config: ClaudexConfig, service: ConsultService, opts
       verdict: 'unknown',
       transcriptPath: transcript.path,
       summary: `Planning failed: ${plan.content || plan.stderr}`,
+    };
+  }
+
+  // Without --apply the peer runs read-only, so it cannot make the change the
+  // reviewer is then asked to look for. The loop cannot converge: every round
+  // reviews an unchanged tree, returns changes-requested, and spends another
+  // Codex consult plus another Claude session plus another full verify run
+  // until the budget is gone. Observed doing exactly that. Stop at the plan,
+  // which is the only useful output this mode can produce.
+  if (!opts.apply) {
+    return {
+      ok: true,
+      planOnly: true,
+      plan: plan.content,
+      rounds: 0,
+      verdict: 'unknown',
+      transcriptPath: transcript.path,
+      summary: 'Plan only — re-run with --apply to let Codex implement it and have Claude review the result.',
     };
   }
 

@@ -1,6 +1,6 @@
 {
   "name": "claudex",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A governed second opinion from your authenticated Codex CLI, inside Claude Code. Budgeted consults, adversarial review, and delegated implementation.",
   "mcpServers": {
     "claudex": {
@@ -8,7 +8,7 @@
       "args": [
         "-y",
         "-p",
-        "@astrosteveo/claudex@0.1.4",
+        "@astrosteveo/claudex@0.1.5",
         "claudex-mcp"
       ]
     }

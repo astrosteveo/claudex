@@ -152,6 +152,14 @@ async function main(): Promise<number> {
         onEvent: (phase, detail) => process.stderr.write(`${cyan(phase.padEnd(10))} ${detail}\n`),
       });
       print();
+      if (res.planOnly) {
+        print(bold('Plan'));
+        print(res.plan ?? '');
+        print();
+        print(res.summary);
+        print(dim(`transcript: ${res.transcriptPath}`));
+        return 0;
+      }
       print(res.ok ? bold('Approved.') : bold('Not approved.'));
       print(res.summary);
       print(dim(`transcript: ${res.transcriptPath}`));

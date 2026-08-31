@@ -137,6 +137,10 @@ test; breaking one tends to fail silently.
   injects it at build time, and `test/packaging.test.ts` fails on any hardcoded `x.y.z` in `src/`.
   0.1.1 shipped introducing itself as 0.1.0 in both `--version` and the MCP handshake — the one
   place you look to confirm a host picked up new code.
+- **`solve` without `--apply` stops at the plan.** The peer runs read-only in that mode, so it
+  cannot make the change the reviewer is then asked to find: every round reviews an unchanged
+  tree, returns changes-requested, and spends another consult, another Claude session and another
+  full verify run until the budget is gone. Watched it do exactly that before the guard existed.
 - **Every log write is fail-soft by contract.** A broken log must never turn a finished peer
   answer into an error.
 - **`claude --output-format stream-json` refuses to run without `--verbose`.** The streamed
