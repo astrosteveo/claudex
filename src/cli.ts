@@ -38,7 +38,8 @@ ${bold('Governing spend')}
 ${bold('Running a consult from the shell')}
   ask "<question>"           One-shot question to Codex
   review [target]            Adversarial review, defaulting to uncommitted changes
-  solve "<task>" [--apply]   Claude plans and reviews, Codex implements, host verifies, loop
+  solve "<task>"             Plan only: Claude plans and prints it, nothing is changed
+  solve "<task>" --apply     Claude plans and reviews, Codex implements, host verifies, loop
                              --rounds <n>  review rounds (default 3)
   debate "<question>"        Both agents answer independently, then critique
                              --rounds <n>  critique rounds (default 1)
