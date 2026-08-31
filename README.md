@@ -28,7 +28,7 @@ subscription or an API key — the latter still works, but bills per token.
 ## Install
 
 ```bash
-npm install -g claudex
+npm install -g @astrosteveo/claudex
 claudex doctor      # verify both CLIs are installed, authed, and behaving as claudex assumes
 claudex install     # register the MCP server with Claude Code, and write the guidance skill
 ```

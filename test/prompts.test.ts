@@ -48,3 +48,36 @@ test('read mode tells the peer not to modify anything', () => {
   assert.match(askPrompt('q', 'read'), /do not modify files/i);
   assert.doesNotMatch(askPrompt('q', 'write'), /do not modify files/i);
 });
+
+test('the review schema satisfies OpenAI strict structured outputs', async () => {
+  // Strict mode requires every key in `properties` to be listed in `required`;
+  // an optional field must be a nullable type instead. Getting this wrong fails
+  // with a 400 before the model runs at all.
+  const { REVIEW_SCHEMA } = await import('../src/core/prompts.ts');
+  const walk = (node: Record<string, unknown>, path: string): void => {
+    if (node['type'] === 'object' && node['properties']) {
+      const props = Object.keys(node['properties'] as Record<string, unknown>);
+      const required = (node['required'] as string[] | undefined) ?? [];
+      assert.deepEqual(
+        props.filter((k) => !required.includes(k)),
+        [],
+        `${path}: every property must be required`,
+      );
+      assert.equal(node['additionalProperties'], false, `${path}: additionalProperties must be false`);
+      for (const [k, v] of Object.entries(node['properties'] as Record<string, unknown>)) {
+        walk(v as Record<string, unknown>, `${path}.${k}`);
+      }
+    }
+    if (node['type'] === 'array' && node['items']) walk(node['items'] as Record<string, unknown>, `${path}[]`);
+  };
+  walk(REVIEW_SCHEMA as unknown as Record<string, unknown>, 'REVIEW_SCHEMA');
+});
+
+test('a nullable line number still renders in a finding', () => {
+  const raw = JSON.stringify({
+    verdict: 'changes-requested',
+    summary: 'no',
+    findings: [{ severity: 'major', file: 'a.ts', line: null, issue: 'leak', why: 'never closed' }],
+  });
+  assert.match(parseVerdict(raw).findings[0]!, /a\.ts — leak/);
+});

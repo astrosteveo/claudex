@@ -45,6 +45,12 @@ export function askPrompt(question: string, mode: Mode, context?: string | null)
     .join('\n');
 }
 
+/**
+ * Passed to `codex exec --output-schema`, which feeds OpenAI structured outputs
+ * in strict mode. Strict mode requires EVERY key in `properties` to appear in
+ * `required` — an optional field has to be expressed as a nullable type instead,
+ * or the request fails with a 400 before the model ever runs.
+ */
 export const REVIEW_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -64,11 +70,11 @@ export const REVIEW_SCHEMA = {
         properties: {
           severity: { type: 'string', enum: ['critical', 'major', 'minor', 'nit'] },
           file: { type: 'string' },
-          line: { type: 'integer' },
+          line: { type: ['integer', 'null'], description: 'Line number, or null if it is not line-specific.' },
           issue: { type: 'string', description: 'What is wrong.' },
           why: { type: 'string', description: 'Concrete inputs or state that make it go wrong.' },
         },
-        required: ['severity', 'file', 'issue', 'why'],
+        required: ['severity', 'file', 'line', 'issue', 'why'],
       },
     },
   },

@@ -1,5 +1,5 @@
 {
-  "name": "claudex",
+  "name": "@astrosteveo/claudex",
   "version": "0.1.0",
   "description": "Give Claude Code a governed second opinion from your authenticated Codex CLI.",
   "type": "module",
@@ -42,5 +42,8 @@
     "ai",
     "code-review",
     "agent"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

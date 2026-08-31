@@ -164,7 +164,9 @@ export class ConsultService {
       content = content || `Codex failed (exit ${String(result.exitCode)}).${result.stderr ? `\n${result.stderr}` : ''}`;
     }
 
-    if (opts.footer !== false && result.content.length > 0) content += PEER_FOOTER;
+    // Only a real answer gets the footer. Appending "evaluate this argument" to
+    // a transport error frames a failure as an opinion.
+    if (opts.footer !== false && result.ok) content += PEER_FOOTER;
 
     return {
       ok: result.ok,
@@ -191,6 +193,15 @@ export class ConsultService {
     req: ConsultRequest = {},
   ): Promise<ConsultResponse & { verdict: ReviewVerdict }> {
     const mode = req.mode ?? this.#config.defaultMode;
+
+    // Peek at the budget before doing any work. The verify command below is a
+    // full test suite; running it only to be told the budget is spent wastes
+    // more of the user's time than the consult would have.
+    const blocked = this.governor.check();
+    if (blocked) {
+      return { ...this.#denial(blocked, 'review', mode), verdict: { verdict: 'unknown', findings: [] } };
+    }
+
     const described = await describeTarget(this.#config.projectRoot, target);
 
     // Run the verify command here on the host — see verify.ts for why a

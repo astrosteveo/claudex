@@ -58,7 +58,9 @@ function render(res: ConsultResponse, extra?: string): { content: { type: 'text'
       `[thread: ${res.threadId} — pass this to codex_reply to keep arguing without re-paying for the context]`,
     );
   }
-  return { content: [{ type: 'text', text: parts.join('\n\n') + budget }], ...(res.ok ? {} : { isError: false }) };
+  // Deliberately never isError: a failed or refused consult is information the
+  // model should read and act on, not a tool fault it should retry.
+  return { content: [{ type: 'text', text: parts.join('\n\n') + budget }] };
 }
 
 const server = new McpServer(

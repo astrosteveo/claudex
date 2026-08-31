@@ -8,7 +8,7 @@
       "args": [
         "-y",
         "-p",
-        "claudex@0.1.0",
+        "@astrosteveo/claudex@0.1.0",
         "claudex-mcp"
       ]
     }
