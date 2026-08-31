@@ -1,0 +1,16 @@
+{
+  "name": "claudex",
+  "version": "0.1.0",
+  "description": "A governed second opinion from your authenticated Codex CLI, inside Claude Code. Budgeted consults, adversarial review, and delegated implementation.",
+  "mcpServers": {
+    "claudex": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "-p",
+        "claudex@0.1.0",
+        "claudex-mcp"
+      ]
+    }
+  }
+}

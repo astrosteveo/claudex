@@ -1,0 +1,11 @@
+{
+  "name": "claudex",
+  "owner": { "name": "claudex" },
+  "plugins": [
+    {
+      "name": "claudex",
+      "source": "./",
+      "description": "Consult an authenticated Codex from Claude Code, under an enforced budget."
+    }
+  ]
+}

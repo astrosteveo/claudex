@@ -1,0 +1,46 @@
+{
+  "name": "claudex",
+  "version": "0.1.0",
+  "description": "Give Claude Code a governed second opinion from your authenticated Codex CLI.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "bin": {
+    "claudex": "dist/cli.js",
+    "claudex-mcp": "dist/mcp-server.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    ".claude-plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test 'test/*.test.ts'",
+    "test:only": "node --test 'test/*.test.ts'",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "mcp",
+    "ai",
+    "code-review",
+    "agent"
+  ]
+}
