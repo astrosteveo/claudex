@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { loadConfig } from './core/config.ts';
 import { ConsultService, type ConsultResponse } from './core/consult.ts';
+import { VERSION } from './core/version.ts';
 import type { Mode } from './core/types.ts';
 
 const config = loadConfig(process.cwd());
@@ -64,7 +65,7 @@ function render(res: ConsultResponse, extra?: string): { content: { type: 'text'
 }
 
 const server = new McpServer(
-  { name: 'claudex', version: '0.1.0', title: 'Codex peer' },
+  { name: 'claudex', version: VERSION, title: 'Codex peer' },
   { capabilities: { tools: {} } },
 );
 

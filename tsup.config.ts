@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
+
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string };
 
 // Bundled to single files on purpose. These entrypoints are launched by an agent
 // CLI, often inside a sandbox, where a transitive dependency that fails to
@@ -14,4 +17,7 @@ export default defineConfig({
   splitting: false,
   clean: true,
   banner: { js: '#!/usr/bin/env node' },
+  // Single-sources the version. Without this it lives in a hardcoded constant
+  // that a release bump silently leaves stale.
+  define: { __CLAUDEX_VERSION__: JSON.stringify(version) },
 });

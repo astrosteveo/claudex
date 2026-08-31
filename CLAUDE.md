@@ -122,6 +122,10 @@ test; breaking one tends to fail silently.
   `test/packaging.test.ts`**, not just documented. Bumping `package.json` without
   `.claude-plugin/plugin.json` ships a plugin that npx-installs the *previous* release, which
   reads as the new code silently not taking effect.
+- **The version has exactly one source: `package.json`.** `src/core/version.ts` reads it, tsup
+  injects it at build time, and `test/packaging.test.ts` fails on any hardcoded `x.y.z` in `src/`.
+  0.1.1 shipped introducing itself as 0.1.0 in both `--version` and the MCP handshake — the one
+  place you look to confirm a host picked up new code.
 - **Every log write is fail-soft by contract.** A broken log must never turn a finished peer
   answer into an error.
 - **`claude --output-format stream-json` refuses to run without `--verbose`.** The streamed

@@ -7,9 +7,9 @@ import { installCommand, uninstallCommand } from './cli/install.ts';
 import { policyCommand } from './cli/policy.ts';
 import { logCommand, statusCommand } from './cli/status.ts';
 import { bold, cyan, dim, fail, print } from './cli/output.ts';
+import { VERSION } from './core/version.ts';
 import type { Mode } from './core/types.ts';
 
-const VERSION = '0.1.0';
 
 const HELP = `${bold('claudex')} — a governed second opinion from Codex, inside Claude Code
 

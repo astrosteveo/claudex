@@ -60,3 +60,26 @@ test('both declared bins point at real build outputs', () => {
     assert.match(built.slice(0, 40), /^#!/, `${name} must keep its shebang to be executable`);
   }
 });
+
+test('the version reported at runtime is the version being published', async () => {
+  // It was hardcoded in two constants a release bump did not touch, so the
+  // published 0.1.1 introduced itself as 0.1.0 — in `--version` and, worse, in
+  // the MCP handshake, which is where you look to confirm a host picked up new
+  // code at all.
+  const { VERSION } = await import('../src/core/version.ts');
+  const pkg = readJson('package.json');
+  assert.equal(VERSION, pkg['version']);
+  assert.doesNotMatch(VERSION, /unknown/, 'version lookup fell through to its fallback');
+});
+
+test('no source file hardcodes a version string', async () => {
+  const { readdirSync } = await import('node:fs');
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? walk(resolve(dir, e.name)) : e.name.endsWith('.ts') ? [resolve(dir, e.name)] : [],
+    );
+  const offenders = walk(resolve(root, 'src'))
+    .filter((f) => !f.endsWith('version.ts'))
+    .filter((f) => /['"]\d+\.\d+\.\d+['"]/.test(readFileSync(f, 'utf8')));
+  assert.deepEqual(offenders, [], 'import VERSION from core/version.ts instead of hardcoding');
+});
