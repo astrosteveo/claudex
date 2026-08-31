@@ -113,11 +113,18 @@ test; breaking one tends to fail silently.
 - **The server must not `process.exit()` with a reply outstanding.** stdout to a pipe is async, so
   exiting drops anything past the pipe buffer (~128 KiB) — exactly where a long peer answer sits.
   On stdin EOF the server closes and lets the event loop drain.
-- **`install` records how to spawn the server, permanently.** It prefers the `claudex-mcp` bin
-  shim, whose `#!/usr/bin/env node` resolves an interpreter at run time; recording
-  `process.execPath` bakes in a version-scoped nvm path that breaks on the next Node upgrade,
-  and surfaces only as the server failing to connect. A dev checkout has no shim on PATH and
-  falls back to the explicit `node <path>` pair.
+- **`install` records how to spawn the server, permanently — and every absolute path available
+  to it is version- or cache-scoped.** `process.execPath` is `…/nvm/versions/node/vX/bin/node`;
+  the resolved `claudex-mcp` shim sits in that same version-scoped directory, so recording it
+  fixes nothing. An npx run resolves the shim under `~/.npm/_npx/<hash>/`, which npm prunes.
+  Hence: bare command name (PATH-resolved at spawn) for a real install, the `npx -p pkg@version`
+  form when the shim is in an npx cache, and the explicit `node <path>` pair only for a dev
+  checkout, where tracking the working tree is what you want. `whichShim` must compare *exact*
+  realpaths — `claudex` and `claudex-mcp` share a directory, so a dirname check would accept a
+  shim pointing at `cli.js` and register the CLI as an MCP server.
+- **Version tests must execute the built artifact, not import the source.** `dist/` is what
+  ships; asserting on the source constant passes against a stale build, which is the exact
+  regression the assertion exists to catch.
 - **`skills/claudex/SKILL.md` and the plugin's version pin are both enforced by
   `test/packaging.test.ts`**, not just documented. Bumping `package.json` without
   `.claude-plugin/plugin.json` ships a plugin that npx-installs the *previous* release, which

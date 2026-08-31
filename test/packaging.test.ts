@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { renderSkill } from '../src/cli/skill.ts';
 import { loadConfig, DEFAULT_POLICY } from '../src/core/config.ts';
@@ -82,4 +83,27 @@ test('no source file hardcodes a version string', async () => {
     .filter((f) => !f.endsWith('version.ts'))
     .filter((f) => /['"]\d+\.\d+\.\d+['"]/.test(readFileSync(f, 'utf8')));
   assert.deepEqual(offenders, [], 'import VERSION from core/version.ts instead of hardcoding');
+});
+
+test('the built CLI reports the version being published, not the one it was built with', () => {
+  // Asserting on the source constant is not enough: the artifact is what ships.
+  // Bump package.json without rebuilding and the source assertion still passes
+  // while `dist/cli.js --version` reports the previous release — which is
+  // exactly the regression this file exists to prevent.
+  const pkg = readJson('package.json');
+  const out = execFileSync(process.execPath, [resolve(root, 'dist/cli.js'), '--version'], {
+    encoding: 'utf8',
+  }).trim();
+  assert.equal(out, pkg['version'], 'dist/ is stale — run `npm run build`');
+});
+
+test('the built MCP server introduces itself with the published version', () => {
+  // The handshake is where you look to confirm a host picked up new code, so a
+  // stale version here is worse than a stale --version.
+  const pkg = readJson('package.json');
+  const bundle = readFileSync(resolve(root, 'dist/mcp-server.js'), 'utf8');
+  assert.ok(
+    bundle.includes(`"${String(pkg['version'])}"`) || bundle.includes(`'${String(pkg['version'])}'`),
+    'dist/mcp-server.js does not carry the current version — run `npm run build`',
+  );
 });

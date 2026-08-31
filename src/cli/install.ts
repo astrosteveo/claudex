@@ -3,10 +3,11 @@ import { promisify } from 'node:util';
 import { mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { loadConfig } from '../core/config.ts';
 import { runDoctor, worstStatus } from '../core/doctor.ts';
 import { renderSkill } from './skill.ts';
+import { PACKAGE_NAME, VERSION } from '../core/version.ts';
 import { SYMBOL, bold, dim, print } from './output.ts';
 
 const execFileAsync = promisify(execFile);
@@ -21,34 +22,64 @@ function mcpEntrypoint(): string {
 /**
  * How to spawn the MCP server, recorded in the host's config for good.
  *
- * Prefer the `claudex-mcp` bin shim, whose `#!/usr/bin/env node` resolves an
- * interpreter at run time. Recording `process.execPath` instead bakes in
- * today's absolute Node path — under nvm that is version-scoped
- * (…/versions/node/v26.7.0/bin/node), so upgrading Node later leaves the host
- * spawning an interpreter that no longer exists. That surfaces as the server
- * simply failing to connect, with nothing pointing at Node as the cause.
+ * The trap is that *every* absolute path available here is version- or
+ * cache-scoped. `process.execPath` is `…/nvm/versions/node/v26.7.0/bin/node`,
+ * and so is the resolved `claudex-mcp` shim beside it — reinstalling globals on
+ * a new Node and removing the old one breaks both identically. An `npx` run
+ * resolves the shim inside `~/.npm/_npx/<hash>/`, which npm prunes on its own
+ * schedule. Recording any of those produces a server that stops connecting
+ * later, with nothing in the failure naming Node or npm as the cause.
  *
- * A dev checkout has no shim on PATH, so it falls back to the explicit pair.
+ * So: prefer the bare command name and let PATH resolve it at spawn time, which
+ * is the only form that survives a Node upgrade that carries globals across.
+ * An npx cache path cannot be made durable that way — nothing puts it on PATH
+ * afterwards — so that case records the npx invocation itself, matching what
+ * the plugin does. A dev checkout has no shim at all and falls back to the
+ * explicit pair, which is correct there: it should track the working tree.
  */
 function serverCommand(): { command: string; args: string[]; via: string } {
   const shim = whichShim();
-  if (shim) return { command: shim, args: [], via: 'claudex-mcp shim (survives Node upgrades)' };
-  const entry = mcpEntrypoint();
-  return { command: process.execPath, args: [entry], via: `this checkout (${entry})` };
+
+  if (shim === null) {
+    const entry = mcpEntrypoint();
+    return { command: process.execPath, args: [entry], via: `this checkout (${entry})` };
+  }
+
+  if (isNpxCache(shim)) {
+    const spec = `${PACKAGE_NAME}@${VERSION}`;
+    return {
+      command: 'npx',
+      args: ['-y', '-p', spec, 'claudex-mcp'],
+      via: `npx ${spec} (an npx cache path would be pruned)`,
+    };
+  }
+
+  return { command: BIN_NAME, args: [], via: `${BIN_NAME} resolved from PATH at launch` };
 }
 
+const BIN_NAME = 'claudex-mcp';
+
+function isNpxCache(path: string): boolean {
+  return path.split(sep).includes('_npx');
+}
+
+/**
+ * Locates the `claudex-mcp` shim, but only accepts one that resolves to *this*
+ * build's MCP entrypoint. Comparing directories is not enough: `claudex-mcp`
+ * and `claudex` live in the same directory and resolve into the same `dist/`,
+ * so a directory match would happily accept a shim pointing at `cli.js` and
+ * register the ordinary CLI as an MCP server — which then never speaks the
+ * protocol and simply fails to connect.
+ */
 function whichShim(): string | null {
-  const found = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['claudex-mcp'], {
+  const found = spawnSync(process.platform === 'win32' ? 'where' : 'which', [BIN_NAME], {
     encoding: 'utf8',
   });
   if (found.status !== 0) return null;
   const path = found.stdout.split('\n')[0]?.trim();
   if (!path) return null;
-  // Only trust a shim that resolves to the build this CLI was launched from;
-  // otherwise `install` would silently register a different installed copy.
   try {
-    const target = realpathSync(path);
-    return dirname(target) === dirname(mcpEntrypoint()) ? path : null;
+    return realpathSync(path) === realpathSync(mcpEntrypoint()) ? path : null;
   } catch {
     return null;
   }
