@@ -71,8 +71,20 @@ test; breaking one tends to fail silently.
 - **`timeoutMs` must be positive.** It is the only thing that reclaims a wedged peer CLI, and a
   falsy value silently disables the kill timer. `parseTimeout` rejects non-positive values and
   `runCodex` throws on them.
-- **An abort must reach the spawned peer.** Without it, an Esc in the host leaves a codex process
-  running and, in write mode, still editing files.
+- **An abort must reach the spawned peer, and escalate.** Without it, an Esc in the host leaves a
+  codex process running and, in write mode, still editing files. Two traps here: Node sets
+  `child.killed` when a signal is *sent*, not when the process dies, so escalating to SIGKILL must
+  be gated on an observed `close` — and `addEventListener` never replays an abort that fired
+  before registration, so `signal.aborted` has to be checked up front.
+- **A verdict is only read from a complete, successful review.** Under `--output-schema` the peer's
+  intermediate progress messages are schema-shaped too, so a timed-out review can leave a stray
+  `{"verdict":"approve"}` in the salvaged text. Take the final message via `-o/--output-last-message`,
+  and never parse a verdict when `partial` is set.
+- **A run that emitted text and then failed is always marked.** Returning salvaged output bare reads
+  as a finished answer; the caller then acts on a partial opinion believing the peer stood behind it.
+- **Anything expensive done before a consult must sit behind a reservation, not a check.** `review()`
+  runs the host verify command — a full test suite — so it reserves its slot first and passes
+  `reserved: true` into `#invoke`. Two concurrent reviews that merely checked would both launch it.
 - **Progress notifications go only to callers that sent a `progressToken`** — the spec forbids
   unsolicited ones.
 - **A sandboxed peer's account of a test run is not evidence.** Inside Codex's sandbox (any `-s`

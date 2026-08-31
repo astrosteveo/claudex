@@ -97,6 +97,23 @@ export async function runCodex(opts: RunOptions): Promise<CodexRunResult> {
     throw new Error('claudex: timeoutMs must be positive');
   }
 
+  // An AbortSignal that already fired is never replayed by addEventListener, so
+  // a consult cancelled during target discovery or host verification would
+  // otherwise run to completion anyway — and in write mode, keep editing.
+  if (opts.signal?.aborted) {
+    return {
+      ok: false,
+      kind: opts.kind,
+      threadId: opts.threadId ?? null,
+      content: '',
+      partial: null,
+      durationMs: 0,
+      exitCode: null,
+      stderr: 'aborted before the peer was started',
+      tokens: { ...ZERO_TOKENS },
+    };
+  }
+
   const startedAt = Date.now();
   const scratch = mkdtempSync(join(tmpdir(), 'claudex-out-'));
   const lastMessagePath = join(scratch, 'last-message.txt');
@@ -114,13 +131,22 @@ export async function runCodex(opts: RunOptions): Promise<CodexRunResult> {
   let streamError: string | null = null;
   let timedOut = false;
   let buffer = '';
+  let exited = false;
+  child.once('close', () => {
+    exited = true;
+  });
 
   const finishAbort = (): void => {
     // The abort has to reach the spawned peer. Without this an Esc in the host
     // leaves a codex process running and, in write mode, still editing files.
-    if (!child.killed) child.kill('SIGTERM');
+    //
+    // The escalation is gated on `exited`, not `child.killed`: Node sets
+    // `killed` when a signal is *sent*, not when the process dies, so a peer
+    // that traps or ignores SIGTERM would never see the SIGKILL and the await
+    // on close would hang until the process decided to leave.
+    child.kill('SIGTERM');
     setTimeout(() => {
-      if (!child.killed) child.kill('SIGKILL');
+      if (!exited) child.kill('SIGKILL');
     }, 2000).unref();
   };
 

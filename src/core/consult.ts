@@ -103,14 +103,17 @@ export class ConsultService {
     kind: ConsultKind,
     prompt: string,
     req: ConsultRequest,
-    opts: { threadId?: string | null; outputSchema?: unknown; footer?: boolean } = {},
+    opts: { threadId?: string | null; outputSchema?: unknown; footer?: boolean; reserved?: boolean } = {},
   ): Promise<ConsultResponse> {
     const mode = req.mode ?? this.#config.defaultMode;
 
     // Reserve before awaiting anything: parallel tool calls must not all pass
-    // the same check. See BudgetGovernor.reserve.
-    const denied = this.governor.reserve();
-    if (denied) return this.#denial(denied, kind, mode);
+    // the same check. See BudgetGovernor.reserve. `reserved` means the caller
+    // already holds a slot — review() takes one before running host verify.
+    if (!opts.reserved) {
+      const denied = this.governor.reserve();
+      if (denied) return this.#denial(denied, kind, mode);
+    }
 
     const timeoutMs =
       req.timeoutMs && req.timeoutMs > 0
@@ -165,7 +168,14 @@ export class ConsultService {
           ? `[INCOMPLETE — Codex hit the ${Math.round(timeoutMs / 1000)}s timeout. This is a partial answer; do not treat it as a conclusion.]\n\n${content}`
           : `Codex hit the ${Math.round(timeoutMs / 1000)}s timeout with nothing to salvage.`;
     } else if (!result.ok) {
-      content = content || `Codex failed (exit ${String(result.exitCode)}).${result.stderr ? `\n${result.stderr}` : ''}`;
+      // A run that emitted text and *then* failed still has text. Returning it
+      // bare reads as a finished answer, so it is always marked. Failing to
+      // mark it is worse than losing it: the caller acts on a partial opinion
+      // believing the peer stood behind it.
+      const detail = `exit ${String(result.exitCode)}${result.stderr ? ` — ${result.stderr.split('\n')[0]}` : ''}`;
+      content = content
+        ? `[FAILED — Codex did not finish (${detail}). What follows is unfinished output, not an answer.]\n\n${content}`
+        : `Codex failed (${detail}).`;
     }
 
     // Only a real answer gets the footer. Appending "evaluate this argument" to
@@ -198,10 +208,11 @@ export class ConsultService {
   ): Promise<ConsultResponse & { verdict: ReviewVerdict }> {
     const mode = req.mode ?? this.#config.defaultMode;
 
-    // Peek at the budget before doing any work. The verify command below is a
-    // full test suite; running it only to be told the budget is spent wastes
-    // more of the user's time than the consult would have.
-    const blocked = this.governor.check();
+    // Reserve before doing any work, not merely peek. The verify command below
+    // is a full test suite; two concurrent reviews that both only *checked*
+    // would both launch it before either was denied, running an expensive and
+    // possibly stateful command for a consult that can never happen.
+    const blocked = this.governor.reserve();
     if (blocked) {
       return { ...this.#denial(blocked, 'review', mode), verdict: { verdict: 'unknown', findings: [] } };
     }
@@ -214,8 +225,16 @@ export class ConsultService {
 
     const res = await this.#invoke('review', reviewPrompt(described, mode, formatEvidence(verify)), req, {
       outputSchema: REVIEW_SCHEMA,
+      reserved: true,
     });
-    return { ...res, verdict: res.ok ? parseVerdict(res.content) : { verdict: 'unknown', findings: [] } };
+
+    // A partial answer is never a verdict. Under --output-schema the peer's
+    // intermediate progress messages are schema-shaped too, so a run that timed
+    // out mid-review can leave a salvaged `{"verdict":"approve"}` in the text.
+    // Reading that would approve code the reviewer never finished looking at —
+    // the exact fail-open this gate exists to prevent.
+    const trustworthy = res.ok && res.partial === null && !res.denied;
+    return { ...res, verdict: trustworthy ? parseVerdict(res.content) : { verdict: 'unknown', findings: [] } };
   }
 
   implement(plan: string, req: ConsultRequest = {}): Promise<ConsultResponse> {
