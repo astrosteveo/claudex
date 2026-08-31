@@ -1,6 +1,6 @@
 {
   "name": "@astrosteveo/claudex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Give Claude Code a governed second opinion from your authenticated Codex CLI.",
   "type": "module",
   "license": "MIT",
