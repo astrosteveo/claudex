@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # Builds first: test/mcp-server.test.ts spawns dist/ as a real subprocess.
+      - run: npm test
+      # No step here invokes a real Codex or Claude. The suite is offline by
+      # construction — every peer interaction is either refused by policy or
+      # served by a fake `codex` placed on PATH by the test itself.

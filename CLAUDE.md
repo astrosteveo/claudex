@@ -113,6 +113,15 @@ test; breaking one tends to fail silently.
 - **The server must not `process.exit()` with a reply outstanding.** stdout to a pipe is async, so
   exiting drops anything past the pipe buffer (~128 KiB) — exactly where a long peer answer sits.
   On stdin EOF the server closes and lets the event loop drain.
+- **`install` records how to spawn the server, permanently.** It prefers the `claudex-mcp` bin
+  shim, whose `#!/usr/bin/env node` resolves an interpreter at run time; recording
+  `process.execPath` bakes in a version-scoped nvm path that breaks on the next Node upgrade,
+  and surfaces only as the server failing to connect. A dev checkout has no shim on PATH and
+  falls back to the explicit `node <path>` pair.
+- **`skills/claudex/SKILL.md` and the plugin's version pin are both enforced by
+  `test/packaging.test.ts`**, not just documented. Bumping `package.json` without
+  `.claude-plugin/plugin.json` ships a plugin that npx-installs the *previous* release, which
+  reads as the new code silently not taking effect.
 - **Every log write is fail-soft by contract.** A broken log must never turn a finished peer
   answer into an error.
 - **`claude --output-format stream-json` refuses to run without `--verbose`.** The streamed

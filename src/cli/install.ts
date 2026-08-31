@@ -1,6 +1,6 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -16,6 +16,42 @@ const execFileAsync = promisify(execFile);
 function mcpEntrypoint(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   return resolve(here, 'mcp-server.js');
+}
+
+/**
+ * How to spawn the MCP server, recorded in the host's config for good.
+ *
+ * Prefer the `claudex-mcp` bin shim, whose `#!/usr/bin/env node` resolves an
+ * interpreter at run time. Recording `process.execPath` instead bakes in
+ * today's absolute Node path — under nvm that is version-scoped
+ * (…/versions/node/v26.7.0/bin/node), so upgrading Node later leaves the host
+ * spawning an interpreter that no longer exists. That surfaces as the server
+ * simply failing to connect, with nothing pointing at Node as the cause.
+ *
+ * A dev checkout has no shim on PATH, so it falls back to the explicit pair.
+ */
+function serverCommand(): { command: string; args: string[]; via: string } {
+  const shim = whichShim();
+  if (shim) return { command: shim, args: [], via: 'claudex-mcp shim (survives Node upgrades)' };
+  const entry = mcpEntrypoint();
+  return { command: process.execPath, args: [entry], via: `this checkout (${entry})` };
+}
+
+function whichShim(): string | null {
+  const found = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['claudex-mcp'], {
+    encoding: 'utf8',
+  });
+  if (found.status !== 0) return null;
+  const path = found.stdout.split('\n')[0]?.trim();
+  if (!path) return null;
+  // Only trust a shim that resolves to the build this CLI was launched from;
+  // otherwise `install` would silently register a different installed copy.
+  try {
+    const target = realpathSync(path);
+    return dirname(target) === dirname(mcpEntrypoint()) ? path : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface InstallOptions {
@@ -39,8 +75,8 @@ export async function installCommand(opts: InstallOptions): Promise<number> {
     return 1;
   }
 
-  const entry = mcpEntrypoint();
-  const args = ['mcp', 'add', '--scope', opts.scope, 'claudex', '--', process.execPath, entry];
+  const server = serverCommand();
+  const args = ['mcp', 'add', '--scope', opts.scope, 'claudex', '--', server.command, ...server.args];
 
   try {
     // `claude mcp add` errors when the name already exists; removing first makes
@@ -50,6 +86,7 @@ export async function installCommand(opts: InstallOptions): Promise<number> {
     );
     const { stdout, stderr } = await execFileAsync('claude', args, { timeout: 60_000 });
     print(`  ${SYMBOL.ok} registered MCP server "claudex" at ${opts.scope} scope`);
+    print(dim(`    via ${server.via}`));
     const detail = (stdout + stderr).trim();
     if (detail) print(dim(`    ${detail.split('\n')[0]}`));
   } catch (err) {
@@ -57,7 +94,7 @@ export async function installCommand(opts: InstallOptions): Promise<number> {
     print(`  ${SYMBOL.fail} could not register with Claude Code: ${(e.stderr ?? e.message ?? '').trim()}`);
     print();
     print('Register it by hand with:');
-    print(dim(`  claude mcp add --scope ${opts.scope} claudex -- ${process.execPath} ${entry}`));
+    print(dim(`  claude mcp add --scope ${opts.scope} claudex -- ${server.command} ${server.args.join(' ')}`));
     return 1;
   }
 
