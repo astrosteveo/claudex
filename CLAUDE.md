@@ -42,6 +42,16 @@ changes belong there, not inline at call sites.
 generated rather than shipped static so the advice Claude reads matches the limits it will
 actually hit.
 
+**There are two distribution surfaces over one codebase.** The npm package (`@astrosteveo/claudex`;
+the bin is still `claudex`) is the engine, and `.claude-plugin/` wraps it so `/plugin install`
+registers the MCP server and the skill together. The plugin manifest pins the package version, so
+bumping `package.json` means bumping `.claude-plugin/plugin.json` with it.
+
+**`skills/claudex/SKILL.md` is a generated artifact that is checked in.** It is the policy-agnostic
+copy the plugin ships; `claudex install` writes a policy-specific one to `~/.claude/skills/`.
+Editing the checked-in file by hand is wrong — change `renderSkill()` and regenerate, or the two
+copies drift.
+
 **Permission modes (`read`/`write`/`full`) are config, not hardcoded** — `CODEX_SANDBOX` in
 `src/core/config.ts`. Codex moves its flag surface between releases; a mode should be
 retargetable without touching adapter code.
@@ -68,6 +78,10 @@ test; breaking one tends to fail silently.
 - **A timed-out peer returns its partial output flagged (`partial: 'timeout'`), never as a clean
   answer**, and a timeout with nothing to salvage fails. Returning a half-answer unflagged would
   defeat every review gate downstream.
+- **A review gets more time than a question.** `KIND_TIMEOUT_MULTIPLIER` in `src/core/config.ts`
+  scales the base timeout per kind. Observed here: an `ask` finishes in under 30s while a
+  three-file `review` overshoots 300s. One flat timeout either truncates every review or lets a
+  wedged question hang for a quarter of an hour. Every multiplier must be positive.
 - **`timeoutMs` must be positive.** It is the only thing that reclaims a wedged peer CLI, and a
   falsy value silently disables the kill timer. `parseTimeout` rejects non-positive values and
   `runCodex` throws on them.
@@ -110,6 +124,13 @@ test; breaking one tends to fail silently.
 - Tests are weighted toward failure directions, not happy paths: a review that fails open, a red
   suite reported as green, a budget that overshoots under concurrency. When fixing a bug, confirm
   the new test fails with the fix reverted before considering it done.
+- **To test a peer failure, put a fake `codex` on `PATH`.** Several failure directions — a peer
+  that emits text then exits non-zero, one that ignores SIGTERM, one that leaves a schema-shaped
+  `approve` behind before timing out — cannot be reached any other way. The pattern is: write a
+  short Node script named `codex` into a temp dir, `chmod 0o755`, prepend that dir to
+  `process.env.PATH`, and restore `PATH` in a `finally`. See `test/failure-modes.test.ts`. These
+  scripts are built inline rather than kept as fixtures, because `node --test` treats every file
+  under `test/` as a test file and a fixture that blocks on stdin hangs the run.
 - Tests that exercise the MCP server spawn it as a real subprocess over real pipes, because the
   bugs worth catching are in the stdio lifecycle. They must never invoke a real Codex — use
   `policy: "off"` or `codex_budget` so the suite is fast, deterministic, and free.
