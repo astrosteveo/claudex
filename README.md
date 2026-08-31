@@ -35,10 +35,11 @@ claudex install     # register the MCP server with Claude Code, and write the gu
 
 Restart any running Claude Code session afterwards.
 
-Or as a Claude Code plugin, which bundles the server and the skill together:
+Or as a Claude Code plugin, which bundles the server and the skill together — replace the path
+with wherever this repo lives:
 
 ```
-/plugin marketplace add <this-repo>
+/plugin marketplace add astrosteveo/claudex
 /plugin install claudex
 ```
 
@@ -93,22 +94,38 @@ prompt:
 | `assisted` | 25 | 900k | 10s |
 | `aggressive` | 60 | unlimited | none |
 
+Timeouts scale with the kind of work, from a 300s base (600s under `aggressive`): a question gets
+the base, a debate 1.5x, a review or a delegated task 3x. A review reads the whole target and
+writes structured findings — it is not a slower question, and one flat timeout either truncates
+every review or lets a wedged question hang for a quarter of an hour.
+
 Tune any of it:
 
 ```bash
 claudex policy budget --max-per-session 5 --max-tokens 200000
-claudex policy budget --cooldown-ms 30000 --global    # user-level instead of project-level
+claudex policy budget --timeout-ms 600000               # base, before the per-kind multiplier
+claudex policy budget --cooldown-ms 30000 --global      # user-level instead of project-level
 ```
 
 When the budget runs out, the tool doesn't error — it returns a **structured refusal** that
 explains what was spent and tells Claude not to retry. A language model can plan around that;
 it just retries an exception.
 
+Partial work is never passed off as finished. A consult that hits its timeout comes back with
+whatever Codex managed to say, prefixed `[INCOMPLETE]`; one that emitted text and then failed is
+prefixed `[FAILED]`. Neither carries the peer footer, and **a review that did not finish never
+yields a verdict** — it reports `unknown`, which reads as changes-requested. Failing open there
+would approve code the reviewer never finished reading.
+
 Config layers lowest to highest: policy defaults → `~/.claudex/config.json` →
 `<project>/.claudex/config.json` → environment (`CLAUDEX_POLICY`, `CLAUDEX_MODE`,
 `CLAUDEX_MAX_PER_SESSION`, `CLAUDEX_TIMEOUT_MS`, `CLAUDEX_MODEL`). Project beats user so a repo
 can tighten spend for everyone in it; environment beats both so one run can be steered without
 editing anything.
+
+`<project>/.claudex/config.json` is meant to be **committed** — that is how a repo binds everyone
+working in it. The run state beside it (`consults.jsonl`, `sessions/`, `runs/`) is local and
+should stay ignored.
 
 See what it actually cost:
 
@@ -156,6 +173,30 @@ agreement afterwards is evidence rather than an artifact of one anchoring the ot
 critique each other.
 
 Both write a full transcript to `.claudex/runs/<n>-<kind>/`.
+
+---
+
+## Developing
+
+```bash
+npm install
+npm test                                     # build, then the whole suite
+npm run test:only                            # suite without rebuilding
+node --test test/budget.test.ts              # one file
+node --test --test-name-pattern 'cooldown'   # one test by name
+npm run typecheck
+node dist/cli.js doctor                      # check the CLI assumptions still hold
+```
+
+The sources run directly under Node's strip-only type stripping, so the suite needs no transform —
+which is why there are no TypeScript parameter properties or enums in the codebase.
+
+`test/mcp-server.test.ts` runs against `dist/`, so build before running it alone. No test ever
+invokes a real Codex: the suite is fast, deterministic, and free.
+
+`claudex doctor` is the regression check for the outside world. Both CLIs move their flag surfaces
+between releases, and the failures that causes are silent — a sandbox flag that stops applying
+does not error, it just stops sandboxing.
 
 ---
 
