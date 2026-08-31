@@ -1,0 +1,3 @@
+{
+  "verifyCommand": "npm run test:only"
+}

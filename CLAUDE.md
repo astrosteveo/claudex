@@ -52,6 +52,11 @@ copy the plugin ships; `claudex install` writes a policy-specific one to `~/.cla
 Editing the checked-in file by hand is wrong — change `renderSkill()` and regenerate, or the two
 copies drift.
 
+**`.claudex/config.json` is committed; everything else under `.claudex/` is not.** Project policy
+outranks user policy precisely so a repo can bind everyone working in it, which only works if it
+is in the tree. The consult log, session usage, and run transcripts beside it are per-run state
+and stay ignored.
+
 **Permission modes (`read`/`write`/`full`) are config, not hardcoded** — `CODEX_SANDBOX` in
 `src/core/config.ts`. Codex moves its flag surface between releases; a mode should be
 retargetable without touching adapter code.

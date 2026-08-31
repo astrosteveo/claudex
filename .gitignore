@@ -1,5 +1,14 @@
 node_modules/
 dist/
-.claudex/
 *.tsbuildinfo
 .DS_Store
+
+# Per-run state: consult history, session usage, solve/debate transcripts.
+# Local to whoever ran it, and noisy in a diff.
+.claudex/consults.jsonl
+.claudex/sessions/
+.claudex/runs/
+
+# NOT ignored: .claudex/config.json. Project policy is meant to be committed —
+# it is how a repo tightens spend for everyone working in it, which is the whole
+# reason project config outranks user config.
