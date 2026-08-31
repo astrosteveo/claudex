@@ -70,3 +70,15 @@ test('a .claudex directory marks the project root over an enclosing repo', () =>
   mkdirSync(nested, { recursive: true });
   assert.equal(findProjectRoot(nested), root);
 });
+
+test('a review gets more time than a question, because it is more work', async () => {
+  const { KIND_TIMEOUT_MULTIPLIER } = await import('../src/core/config.ts');
+  assert.equal(KIND_TIMEOUT_MULTIPLIER.ask, 1);
+  assert.ok(KIND_TIMEOUT_MULTIPLIER.review > KIND_TIMEOUT_MULTIPLIER.ask);
+  assert.ok(KIND_TIMEOUT_MULTIPLIER.solve > KIND_TIMEOUT_MULTIPLIER.ask);
+  // Every kind must have a positive multiplier: a zero would silently disable
+  // the only thing that reclaims a wedged peer.
+  for (const [kind, m] of Object.entries(KIND_TIMEOUT_MULTIPLIER)) {
+    assert.ok(m > 0, `${kind} multiplier must be positive`);
+  }
+});

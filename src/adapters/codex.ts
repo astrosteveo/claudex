@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { CODEX_SANDBOX } from '../core/config.ts';
 import type { ConsultKind, ConsultResult, Mode } from '../core/types.ts';
 
@@ -27,6 +30,8 @@ export interface RunOptions {
   threadId?: string | null;
   /** Path to a JSON Schema file constraining the final message. */
   outputSchemaPath?: string | null;
+  /** Path codex writes its final message to. Set internally by runCodex. */
+  lastMessagePath?: string | null;
   signal?: AbortSignal;
   /** Called with streamed agent/reasoning text, for MCP progress notifications. */
   onProgress?: (note: string) => void;
@@ -75,6 +80,10 @@ export function buildArgs(opts: RunOptions): string[] {
   args.push('--json', '--skip-git-repo-check');
   if (opts.model) args.push('-m', opts.model);
   if (opts.outputSchemaPath) args.push('--output-schema', opts.outputSchemaPath);
+  // codex emits intermediate agent messages as it works — under --output-schema
+  // they are each schema-shaped, so concatenating the stream yields several
+  // rival answers. `-o` writes only the final message, which is the real one.
+  if (opts.lastMessagePath) args.push('-o', opts.lastMessagePath);
 
   // Trailing `-` makes codex read the prompt from stdin. Never argv: Linux caps
   // a single argv entry at 128 KiB and a prompt carrying a diff blows past it.
@@ -89,7 +98,9 @@ export async function runCodex(opts: RunOptions): Promise<CodexRunResult> {
   }
 
   const startedAt = Date.now();
-  const args = buildArgs(opts);
+  const scratch = mkdtempSync(join(tmpdir(), 'claudex-out-'));
+  const lastMessagePath = join(scratch, 'last-message.txt');
+  const args = buildArgs({ ...opts, lastMessagePath });
   const child = spawn('codex', args, {
     cwd: opts.cwd,
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -204,6 +215,22 @@ export async function runCodex(opts: RunOptions): Promise<CodexRunResult> {
       /* ignore */
     }
   }
+
+  // The final message is authoritative when codex got far enough to write it.
+  // On a timeout the file is absent, and the concatenated stream is exactly the
+  // partial answer worth salvaging.
+  let finalMessage = '';
+  try {
+    finalMessage = readFileSync(lastMessagePath, 'utf8').trim();
+  } catch {
+    /* absent on timeout or early failure */
+  }
+  try {
+    rmSync(scratch, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+  if (finalMessage) answer = finalMessage;
 
   const durationMs = Date.now() - startedAt;
 

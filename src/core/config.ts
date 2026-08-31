@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import type { Budget, ClaudexConfig, Mode, Policy } from './types.ts';
+import type { Budget, ClaudexConfig, ConsultKind, Mode, Policy } from './types.ts';
 
 export const POLICIES: readonly Policy[] = ['off', 'on-request', 'assisted', 'aggressive'] as const;
 export const MODES: readonly Mode[] = ['read', 'write', 'full'] as const;
@@ -24,6 +24,23 @@ export const CODEX_SANDBOX: Record<Mode, string> = {
   read: 'read-only',
   write: 'workspace-write',
   full: 'danger-full-access',
+};
+
+/**
+ * Per-kind multiplier on the base timeout.
+ *
+ * A review is not a slower question, it is a different amount of work: Codex
+ * reads the whole target, runs its own checks, and writes structured findings.
+ * Observed on this repo, a three-file review overshoots a 300s budget while an
+ * `ask` finishes in under 30s. One flat timeout either cuts reviews off or
+ * lets a wedged question hang for a quarter of an hour.
+ */
+export const KIND_TIMEOUT_MULTIPLIER: Record<ConsultKind, number> = {
+  ask: 1,
+  reply: 1,
+  debate: 1.5,
+  review: 3,
+  solve: 3,
 };
 
 export const CONFIG_DIRNAME = '.claudex';

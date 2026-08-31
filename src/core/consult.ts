@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { KIND_TIMEOUT_MULTIPLIER } from './config.ts';
 import { runCodex, type CodexRunResult } from '../adapters/codex.ts';
 import { BudgetGovernor, newUsage, type SessionUsage } from './budget.ts';
 import { ConsultLog } from './log.ts';
@@ -111,7 +112,10 @@ export class ConsultService {
     const denied = this.governor.reserve();
     if (denied) return this.#denial(denied, kind, mode);
 
-    const timeoutMs = req.timeoutMs && req.timeoutMs > 0 ? req.timeoutMs : this.#config.budget.timeoutMs;
+    const timeoutMs =
+      req.timeoutMs && req.timeoutMs > 0
+        ? req.timeoutMs
+        : Math.round(this.#config.budget.timeoutMs * KIND_TIMEOUT_MULTIPLIER[kind]);
 
     const run = (schemaPath: string | null): Promise<CodexRunResult> =>
       runCodex({
