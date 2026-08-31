@@ -21,6 +21,8 @@ ${bold('Setup')}
   install [--scope <s>]      Register the MCP server with Claude Code (scope: user|project|local)
                              --no-skill  skip writing the consultation guidance skill
                              --force     install despite failing checks
+                             --pinned    record a version-pinned npx invocation
+                                         instead of resolving from PATH at launch
   uninstall [--scope <s>]    Remove the MCP server registration
 
 ${bold('Governing spend')}
@@ -99,6 +101,7 @@ async function main(): Promise<number> {
         scope: parseScope(rest),
         skill: !flag(rest, '--no-skill'),
         force: flag(rest, '--force'),
+        pinned: flag(rest, '--pinned'),
       });
 
     case 'uninstall':

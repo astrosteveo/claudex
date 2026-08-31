@@ -82,3 +82,11 @@ test('a review gets more time than a question, because it is more work', async (
     assert.ok(m > 0, `${kind} multiplier must be positive`);
   }
 });
+
+test('a reply gets review-grade time, since it may be continuing a review', async () => {
+  // Observed: a reply pushing back on review findings was truncated at the
+  // ask-grade 300s. Nothing at the call site knows what kind of thread a reply
+  // continues, so it has to assume the most expensive one.
+  const { KIND_TIMEOUT_MULTIPLIER } = await import('../src/core/config.ts');
+  assert.equal(KIND_TIMEOUT_MULTIPLIER.reply, KIND_TIMEOUT_MULTIPLIER.review);
+});

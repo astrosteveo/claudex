@@ -37,8 +37,18 @@ function mcpEntrypoint(): string {
  * the plugin does. A dev checkout has no shim at all and falls back to the
  * explicit pair, which is correct there: it should track the working tree.
  */
-function serverCommand(): { command: string; args: string[]; via: string } {
+function serverCommand(pinned: boolean): { command: string; args: string[]; via: string; note?: string } {
   const shim = whichShim();
+
+  if (pinned) {
+    const spec = `${PACKAGE_NAME}@${VERSION}`;
+    return {
+      command: 'npx',
+      args: ['-y', '-p', spec, 'claudex-mcp'],
+      via: `npx ${spec} (pinned)`,
+      note: 'Pinned to this version: it will not follow `npm i -g` upgrades, and it needs the registry on a cold cache.',
+    };
+  }
 
   if (shim === null) {
     const entry = mcpEntrypoint();
@@ -54,7 +64,16 @@ function serverCommand(): { command: string; args: string[]; via: string } {
     };
   }
 
-  return { command: BIN_NAME, args: [], via: `${BIN_NAME} resolved from PATH at launch` };
+  return {
+    command: BIN_NAME,
+    args: [],
+    via: `${BIN_NAME} resolved from PATH at launch`,
+    // Worth stating outright: the host does not initialise the user's shell, so
+    // the PATH at launch is not the PATH that ran this command. Bare-name
+    // resolution follows a migrated global install, which an absolute path
+    // cannot — but it depends on that contract holding.
+    note: 'Claude Code resolves this from its own PATH at launch, which is not this shell\'s. If the server fails to connect from a GUI-launched host, re-run with --pinned.',
+  };
 }
 
 const BIN_NAME = 'claudex-mcp';
@@ -89,6 +108,8 @@ export interface InstallOptions {
   scope: 'user' | 'project' | 'local';
   skill: boolean;
   force: boolean;
+  /** Record a version-pinned `npx` invocation instead of resolving from PATH. */
+  pinned: boolean;
 }
 
 export async function installCommand(opts: InstallOptions): Promise<number> {
@@ -106,7 +127,7 @@ export async function installCommand(opts: InstallOptions): Promise<number> {
     return 1;
   }
 
-  const server = serverCommand();
+  const server = serverCommand(opts.pinned);
   const args = ['mcp', 'add', '--scope', opts.scope, 'claudex', '--', server.command, ...server.args];
 
   try {
@@ -118,6 +139,7 @@ export async function installCommand(opts: InstallOptions): Promise<number> {
     const { stdout, stderr } = await execFileAsync('claude', args, { timeout: 60_000 });
     print(`  ${SYMBOL.ok} registered MCP server "claudex" at ${opts.scope} scope`);
     print(dim(`    via ${server.via}`));
+    if (server.note) print(dim(`    ${server.note}`));
     const detail = (stdout + stderr).trim();
     if (detail) print(dim(`    ${detail.split('\n')[0]}`));
   } catch (err) {

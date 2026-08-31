@@ -119,7 +119,11 @@ test; breaking one tends to fail silently.
   fixes nothing. An npx run resolves the shim under `~/.npm/_npx/<hash>/`, which npm prunes.
   Hence: bare command name (PATH-resolved at spawn) for a real install, the `npx -p pkg@version`
   form when the shim is in an npx cache, and the explicit `node <path>` pair only for a dev
-  checkout, where tracking the working tree is what you want. `whichShim` must compare *exact*
+  checkout, where tracking the working tree is what you want. None of the three is universally
+  durable: the bare name depends on the host's launch PATH (which can also *shadow* it with
+  another package's binary — starting the wrong code rather than failing loudly), and `npx`
+  normally lives in the same version-scoped bin directory, so a host missing one misses both.
+  `--pinned` exposes the tradeoff rather than pretending it is solved. `whichShim` must compare *exact*
   realpaths — `claudex` and `claudex-mcp` share a directory, so a dirname check would accept a
   shim pointing at `cli.js` and register the CLI as an MCP server.
 - **Version tests must execute the built artifact, not import the source.** `dist/` is what

@@ -35,6 +35,19 @@ claudex install     # register the MCP server with Claude Code, and write the gu
 
 Restart any running Claude Code session afterwards.
 
+`install` records how to launch the server, and the durable form differs by install shape. A
+global install records the bare name `claudex-mcp`, resolved from **Claude Code's** PATH at
+launch — which is not this shell's, since the host does not initialise your shell environment.
+That follows a global install migrated to a new Node, which an absolute path cannot. If the
+server fails to connect from a GUI-launched host, or you want a deterministic version:
+
+```bash
+claudex install --pinned    # records `npx -p @astrosteveo/claudex@<version> claudex-mcp`
+```
+
+Pinned trades PATH independence for a registry dependency on a cold cache, and it stops
+following `npm i -g` upgrades until you re-run `install`.
+
 Or as a Claude Code plugin, which bundles the server and the skill together — replace the path
 with wherever this repo lives:
 

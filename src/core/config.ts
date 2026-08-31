@@ -37,7 +37,12 @@ export const CODEX_SANDBOX: Record<Mode, string> = {
  */
 export const KIND_TIMEOUT_MULTIPLIER: Record<ConsultKind, number> = {
   ask: 1,
-  reply: 1,
+  // A reply inherits the weight of whatever thread it continues, and nothing
+  // here knows what that was. Continuing a review means review-grade work, so
+  // giving replies ask-grade time truncates them — observed: a reply pushing
+  // back on review findings was cut off at 300s. The timeout is a ceiling for
+  // reclaiming a wedged peer, not a wait, so erring high costs nothing normally.
+  reply: 3,
   debate: 1.5,
   review: 3,
   solve: 3,
