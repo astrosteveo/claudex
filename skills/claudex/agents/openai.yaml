@@ -1,0 +1,6 @@
+interface:
+  display_name: "Claudex"
+  short_description: "Let Codex lead and bring Claude in when useful"
+  default_prompt: "Use $claudex to decide where Claude can help with this task, then integrate and verify its contribution."
+policy:
+  allow_implicit_invocation: true
