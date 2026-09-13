@@ -94,11 +94,19 @@ authoritative checks after integration. Repositories with symlinks,
 submodules, more than 15,000 files, or more than 256 MiB of copied files need a
 focused consultation or implementation by Claude instead.
 
-Use the Bash tool's `run_in_background` option for longer calls and collect the
-result when notified. Keep the user informed at meaningful handoffs. The default
-timeout is 600 seconds; increase only for a concrete need with `--timeout` (up to
-1800). `--max-turns` does not apply to Codex. `--model` is optional; use an
-explicit user choice when given, otherwise let Codex choose its default.
+Runs have no time limit by default. Omit `--timeout` unless the user explicitly
+requests a time limit; do not invent a budget based on task size. An explicit
+timeout is a positive integer in seconds with no bridge-imposed upper bound.
+`--max-turns` does not apply to Codex.
+
+Start Claudex calls with the Bash tool's `run_in_background` option and collect
+that same run when notified. Keep waiting until it finishes or the user cancels. A
+short yield or polling interval only controls when the tool returns control; it
+must not terminate the worker. Do not wrap the command in a shell `timeout`, set
+a tool execution deadline, or cancel a still-running worker merely because a
+poll has no output unless the user requested that limit. Keep the user informed
+at meaningful handoffs. `--model` is optional; use an explicit user choice when
+given, otherwise let Codex choose its default.
 
 ## Integrate the handoff
 

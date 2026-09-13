@@ -47,6 +47,10 @@ bridge. The user has authorized this workflow across their projects; no repeated
 permission question is needed for in-scope collaboration. {spec['lead']} owns the final
 decisions, integration, verification, and user communication. If {spec['worker_short']} is
 unavailable or limited, continue with {spec['short']} and briefly state the limitation.
+
+Claudex runs have no time or turn limit by default. Only set limits when the user
+explicitly requests them. Use running sessions or background execution to wait for
+completion; short polling intervals must not become worker execution deadlines.
 {END}
 """
 

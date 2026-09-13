@@ -1,3 +1,5 @@
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
@@ -168,6 +170,70 @@ class BridgeCase(unittest.TestCase):
         (self.project / ".env").write_text("SECRET=not-shared\n")
         (self.project / "dependencies").mkdir()
         (self.project / "dependencies/large.bin").write_bytes(b"not copied")
+
+
+class WorkerLimitTests(BridgeCase):
+    def test_default_runs_have_no_deadline_or_turn_cap(self):
+        for worker in ("claude", "codex"):
+            with self.subTest(worker=worker):
+                argv = ["claudex", "run", "--worker", worker, "--project", str(self.project),
+                        "--prompt-file", str(self.brief)]
+                stdout = io.StringIO()
+                # Exercise CLI parsing and real fake-worker execution together;
+                # observe the deadline without waiting out the old 600 seconds.
+                with patch.dict(os.environ, self.env), patch.object(sys, "argv", argv), \
+                     patch.object(claudex, "process", wraps=claudex.process) as process, \
+                     patch.object(claudex.signal, "signal"), \
+                     redirect_stdout(stdout), redirect_stderr(io.StringIO()):
+                    self.assertEqual(claudex.main(), 0)
+                payload = json.loads(stdout.getvalue())
+                self.assertEqual(payload["status"], "complete")
+                self.assertIsNone(payload["timeout_seconds"])
+                self.assertIsNone(payload["max_turns"])
+                self.assertIsNone(process.call_args.kwargs["timeout"])
+                capture = json.loads(self.capture.read_text())
+                self.assertNotIn("--max-turns", capture["args"])
+                saved = json.loads((Path(payload["artifacts"]) / "result.json").read_text())
+                self.assertIsNone(saved["timeout_seconds"])
+                self.assertIsNone(saved["max_turns"])
+
+    def test_explicit_claude_limits_are_forwarded_including_above_old_caps(self):
+        for turns, seconds in ((3, 5), (100, 7200)):
+            with self.subTest(turns=turns, seconds=seconds):
+                result, payload = self.run_worker("--max-turns", str(turns), "--timeout", str(seconds))
+                self.assertEqual(result.returncode, 0, payload)
+                self.assertEqual(payload["max_turns"], turns)
+                self.assertEqual(payload["timeout_seconds"], seconds)
+                args = json.loads(self.capture.read_text())["args"]
+                self.assertEqual(args[args.index("--max-turns") + 1], str(turns))
+
+    def test_explicit_turn_cap_does_not_add_a_timeout(self):
+        result, payload = self.run_worker("--max-turns", "3")
+        self.assertEqual(result.returncode, 0, payload)
+        self.assertEqual(payload["max_turns"], 3)
+        self.assertIsNone(payload["timeout_seconds"])
+
+    def test_explicit_timeout_does_not_add_a_turn_cap(self):
+        for worker in ("claude", "codex"):
+            with self.subTest(worker=worker):
+                result, payload = self.run_worker("--worker", worker, "--timeout", "7200")
+                self.assertEqual(result.returncode, 0, payload)
+                self.assertEqual(payload["timeout_seconds"], 7200)
+                self.assertIsNone(payload["max_turns"])
+                self.assertNotIn("--max-turns", json.loads(self.capture.read_text())["args"])
+
+    def test_invalid_limits_are_rejected_before_worker_start(self):
+        for flag in ("--timeout", "--max-turns"):
+            for value in ("0", "-1", "1.5", "unlimited"):
+                with self.subTest(flag=flag, value=value):
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "claudex.py"), "run", "--project", str(self.project),
+                         "--prompt-file", str(self.brief), flag, value],
+                        env=self.env, capture_output=True, text=True, timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn(flag, result.stderr)
+                    self.assertFalse(self.capture.exists())
 
 
 class IntegrationTests(BridgeCase):

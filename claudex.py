@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """A local bridge between Claude Code and Codex. Whichever CLI the user drives leads;
-the other runs headless as a bounded worker. Python 3.11+, no dependencies."""
+the other runs headless on a focused task. Python 3.11+, no dependencies."""
 
 from __future__ import annotations
 
@@ -127,9 +127,9 @@ def toml_string(value: str) -> str:
     return '"' + "".join(out) + '"'
 
 
-def process(command: list[str], *, cwd: Path, timeout: float,
+def process(command: list[str], *, cwd: Path, timeout: float | None,
             input_text: str | None = None, env: dict | None = None) -> subprocess.CompletedProcess:
-    """Bound the entire child process group, including on Ctrl-C."""
+    """Wait without a deadline when timeout is None; stop the group on timeout or cancellation."""
     child = subprocess.Popen(
         command, cwd=cwd, env=env, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -422,15 +422,17 @@ def mode_instructions(worker: str, mode: str, allowed: list[str]) -> str:
     return text
 
 
-def claude_command(check: dict, args: argparse.Namespace, instructions: str, max_turns: int) -> list[str]:
+def claude_command(check: dict, args: argparse.Namespace, instructions: str) -> list[str]:
     tools = EDIT_TOOLS if args.mode == "implement" else READ_TOOLS
     command = [
         check["claude_path"], *GUARDS, "--print", "--output-format", "json",
         "--permission-mode", "dontAsk", "--permission-prompts", "none",
         "--tools", tools, "--allowedTools", tools, "--disallowedTools", "mcp__*",
-        "--no-session-persistence", "--max-turns", str(max_turns),
+        "--no-session-persistence",
         "--append-system-prompt", CLAUDE_PROMPT + instructions,
     ]
+    if args.max_turns is not None:
+        command += ["--max-turns", str(args.max_turns)]
     if args.model:
         command += ["--model", args.model]
     return command
@@ -515,8 +517,7 @@ def run_worker(args: argparse.Namespace) -> dict:
     if args.mode != "implement" and allowed:
         raise BridgeError("--allow-file applies only to implementation.")
     if args.worker == "codex" and args.max_turns is not None:
-        raise BridgeError("--max-turns applies only to the Claude worker; --timeout bounds Codex.")
-    max_turns = None if args.worker == "codex" else (12 if args.max_turns is None else args.max_turns)
+        raise BridgeError("--max-turns applies only to the Claude worker; use --timeout if a Codex time limit is requested.")
     check = health(args.worker)
     if check["status"] != "ready":
         raise BridgeError(check["message"], check["status"])
@@ -529,7 +530,7 @@ def run_worker(args: argparse.Namespace) -> dict:
     record = {
         "status": "running", "worker": args.worker, "mode": args.mode, "project": str(project),
         "artifacts": str(job), "allowed_files": allowed,
-        "model_requested": args.model, "max_turns": max_turns,
+        "model_requested": args.model, "max_turns": args.max_turns,
         "timeout_seconds": args.timeout, "worker_version": check[args.worker + "_version"],
     }
     if args.worker == "claude":
@@ -549,7 +550,7 @@ def run_worker(args: argparse.Namespace) -> dict:
             before = tree_state(project)
         instructions = mode_instructions(args.worker, args.mode, allowed)
         if args.worker == "claude":
-            command = claude_command(check, args, instructions, max_turns)
+            command = claude_command(check, args, instructions)
         else:
             command = codex_command(check, args, job, workspace, instructions)
         response = process(command, cwd=workspace, timeout=args.timeout, input_text=prompt, env=worker_env(args.worker))
@@ -587,13 +588,11 @@ def run_worker(args: argparse.Namespace) -> dict:
     return record
 
 
-def bounded_int(low: int, high: int):
-    def parse(value: str) -> int:
-        number = int(value)
-        if not low <= number <= high:
-            raise argparse.ArgumentTypeError(f"must be between {low} and {high}")
-        return number
-    return parse
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer; omit the option for no limit")
+    return number
 
 
 def main() -> int:
@@ -613,8 +612,8 @@ def main() -> int:
     run.add_argument("--mode", choices=("consult", "review", "implement"), default="consult")
     run.add_argument("--allow-file", action="append", default=[], help="Exact relative file the worker may change; repeatable")
     run.add_argument("--model", help="Optional model alias or ID; otherwise the worker's default")
-    run.add_argument("--max-turns", type=bounded_int(1, 40), default=None, help="Claude worker only; default 12")
-    run.add_argument("--timeout", type=bounded_int(1, 1800), default=600, help="Worker timeout in seconds")
+    run.add_argument("--max-turns", type=positive_int, default=None, help="Claude worker turn limit; default: no limit (set only when requested)")
+    run.add_argument("--timeout", type=positive_int, default=None, help="Worker timeout in seconds; default: no limit (set only when requested)")
     args = parser.parse_args()
     try:
         result = health(args.worker) if args.command == "doctor" else run_worker(args)

@@ -2,7 +2,7 @@
 
 Drive the coding CLI you prefer. Let it bring the other one into the work when a
 second model would help. The CLI you drive stays responsible for the conversation,
-decisions, integration, and tests; the other runs headless as a bounded worker.
+decisions, integration, and tests; the other runs headless on a focused task.
 
 | You drive | Worker | Skill | Policy | Command |
 | --- | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ Typical collaboration:
   sprites, photos, illustrations, and mockups as an invariant handoff to Codex.
 
 Simple tasks stay with the lead. You can say "Codex only", "Claude only", "ask
-Claude", or "ask Codex" in any message. Calls are bounded; a worker being
+Claude", or "ask Codex" in any message. Tasks stay focused; a worker being
 unavailable does not prevent the lead from continuing. Automatic selection is an
 instruction to the lead, not a deterministic hook or a guarantee.
 
@@ -124,11 +124,21 @@ claudex run --worker codex --project /path/to/repository --mode implement \
   --allow-file src/example.py --allow-file assets/texture.png --prompt-file /tmp/brief.md
 ```
 
-`--worker` defaults to `claude`. `--prompt-file -` reads stdin. Optional `--model`
-and `--timeout` (default 600 seconds) allow focused adjustments; `--max-turns`
-(default 12) applies to the Claude worker only. No automatic retries or fallback to
-API authentication are performed. Each run is independent; follow-up briefs should
-include the relevant prior handoff.
+`--worker` defaults to `claude`. `--prompt-file -` reads stdin. `--model` is
+optional. Worker runs have **no timeout or turn cap by default**. Only when the
+user requests a limit, pass `--timeout SECONDS` for either worker or
+`--max-turns TURNS` for Claude. Both accept positive integers with no
+bridge-imposed upper bound. Omit a limit to leave it unlimited; result metadata records omitted
+`timeout_seconds` and `max_turns` as `null`. CLI health checks and local Git
+operations retain their diagnostic timeouts.
+
+Agents should use running sessions or background execution, collect the same run
+until completion or user cancellation, and keep the user informed. Short yield or
+polling intervals must not become execution deadlines; do not add shell or tool
+timeouts unless the user requests them. Ctrl-C and termination still cancel the
+worker process group. No automatic retries or fallback to API authentication are
+performed. Each run is independent; follow-up briefs should include the relevant
+prior handoff.
 
 Run artifacts live in `$XDG_STATE_HOME/claudex/runs`, defaulting to
 `~/.local/state/claudex/runs`. Each private directory contains the task brief,
@@ -170,9 +180,10 @@ python3 install.py --uninstall            # or --uninstall --lead claude
 
 The tests use fake Claude and Codex processes and real temporary Git repositories.
 They exercise authentication gates, environment scrubbing, the nested-run guard,
-failure handling, timeout termination, literal prompt delivery, dirty-worktree
-snapshots, patch integration, and installation of either or both leads. Native
-consultation, review, implementation, and image-generation runs have also been
+failure handling, unlimited defaults, explicit limits, timeout termination,
+literal prompt delivery, dirty-worktree snapshots, patch integration, and
+installation of either or both leads. Native consultation, review, implementation,
+and image-generation runs have also been
 verified with the signed-in subscriptions. See [VALIDATION.md](VALIDATION.md) for
 the evidence and review corrections.
 Uninstall removes only Claudex's links and marked instruction blocks; artifacts
